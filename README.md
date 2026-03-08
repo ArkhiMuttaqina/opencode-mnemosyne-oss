@@ -1,0 +1,93 @@
+# opencode-mnemosyne
+
+OpenCode plugin for **local persistent memory** using [Mnemosyne](https://github.com/gandazgul/mnemosyne). Gives your AI coding agent memory that persists across sessions -- entirely offline, no cloud APIs.
+
+This is the local/offline alternative to cloud-based memory plugins like opencode-supermemory.
+
+## Prerequisites
+
+Install the mnemosyne binary first:
+
+```bash
+# From source (requires Go 1.21+, GCC, Task)
+git clone https://github.com/gandazgul/mnemosyne.git
+cd mnemosyne
+task install
+```
+
+See the [mnemosyne README](https://github.com/gandazgul/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne will automatically download its ML models (~500 MB one-time).
+
+## Install
+
+Add to your `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-mnemosyne"]
+}
+```
+
+That's it. OpenCode will install the plugin automatically.
+
+## What it does
+
+### Tools
+
+The plugin registers five tools available to the AI agent:
+
+| Tool | Description |
+|------|-------------|
+| `memory_recall` | Search project memory for relevant context and past decisions |
+| `memory_recall_global` | Search global memory for cross-project preferences |
+| `memory_store` | Store a project-scoped memory (decision, preference, context) |
+| `memory_store_global` | Store a cross-project memory (coding style, tool choices) |
+| `memory_delete` | Delete an outdated memory by its document ID |
+
+### Hooks
+
+- **`experimental.session.compacting`** -- Injects memory tool instructions into the compaction prompt so the agent retains awareness of its memory capabilities across context window resets.
+
+### Memory scoping
+
+| Scope | Collection | Persists across |
+|-------|-----------|-----------------|
+| Project | `<directory-name>` | Sessions in the same project |
+| Global | `global` | All projects |
+
+The project collection is auto-initialized when the plugin loads. The global collection is created on first use of `memory_store_global`.
+
+## AGENTS.md (recommended)
+
+For best results, add this to your project or global `AGENTS.md` so the agent uses memory proactively from the start of each session:
+
+```markdown
+## Memory (mnemosyne)
+
+- At the start of a conversation, use memory_recall to search for context
+  relevant to the user's first message.
+- After significant decisions, use memory_store to save a concise summary.
+- Delete contradicted memories with memory_delete before storing updated ones.
+- Use memory_recall_global / memory_store_global for cross-project preferences.
+```
+
+## How it works
+
+Mnemosyne is a local document store with hybrid search:
+- **Full-text search** (SQLite FTS5, BM25 ranking)
+- **Vector search** (sqlite-vec, cosine similarity with snowflake-arctic-embed-m-v1.5)
+- **Reciprocal Rank Fusion** combines both for best results
+
+All ML inference runs locally via ONNX Runtime. Your memories never leave your machine.
+
+## Development
+
+```bash
+bun install
+bun run build
+bun run typecheck
+```
+
+## License
+
+MIT
