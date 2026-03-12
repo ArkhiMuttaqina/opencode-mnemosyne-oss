@@ -84,10 +84,20 @@ All ML inference runs locally via ONNX Runtime. Your memories never leave your m
 
 ## Development
 
+This project uses standard Node.js tools: `npm` for package management and `tsc` (TypeScript compiler) for building.
+
 ```bash
-bun install
-bun run build
-bun run typecheck
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+
+# Start the compiler in watch mode for development
+npm run dev
+
+# Run TypeScript checks
+npm run typecheck
 ```
 
 ## License
