@@ -60,8 +60,7 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
         async execute(args) {
           const result = await mnemosyne(
             "search",
-            "--name",
-            "global",
+            "--global",
             "--format",
             "plain",
             args.query,
@@ -91,9 +90,9 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
         },
         async execute(args) {
           // Ensure the global collection exists.
-          await $`mnemosyne init --name global`.quiet().nothrow()
+          await $`mnemosyne init --global`.quiet().nothrow()
           return (
-            await mnemosyne("add", "--name", "global", args.content)
+            await mnemosyne("add", "--global", args.content)
           ).trim()
         },
       }),

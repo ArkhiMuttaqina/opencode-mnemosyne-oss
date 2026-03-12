@@ -64,11 +64,13 @@ For best results, add this to your project or global `AGENTS.md` so the agent us
 ```markdown
 ## Memory (mnemosyne)
 
-- At the start of a conversation, use memory_recall to search for context
+- At the start of a session, use memory_recall and memory_recall_global to search for context
   relevant to the user's first message.
 - After significant decisions, use memory_store to save a concise summary.
 - Delete contradicted memories with memory_delete before storing updated ones.
 - Use memory_recall_global / memory_store_global for cross-project preferences.
+- When you are done with a session store any memories that you think are relevant to the user and the project. 
+  This will help you recall important information in future sessions.
 ```
 
 ## How it works
