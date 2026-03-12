@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node && tsc --emitDeclarationOnly",
+    "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
@@ -28,11 +28,11 @@
     "url": "git+https://github.com/gandazgul/opencode-mnemosyne.git"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.0.162"
+    "@opencode-ai/plugin": "^1.2.24"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.7.3"
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
   },
   "opencode": {
     "type": "plugin"
