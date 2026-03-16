@@ -1,32 +1,91 @@
-import { type Plugin, tool } from "@opencode-ai/plugin"
-import path from "path"
+import { type Plugin, tool } from "@opencode-ai/plugin";
+import path from "path";
 
-export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
-  const project = path.basename(worktree || directory)
+export const MnemosynePlugin: Plugin = async (ctx) => {
+  const { directory, worktree, client } = ctx;
+  const targetDir = directory || worktree || process.cwd();
+  
+  const log = {
+    debug: (msg: string) =>
+      client.app
+        .log({ body: { service: "mnemosyne", level: "debug", message: msg } })
+        .catch(() => {}),
+    info: (msg: string) =>
+      client.app
+        .log({ body: { service: "mnemosyne", level: "info", message: msg } })
+        .catch(() => {}),
+    warn: (msg: string) =>
+      client.app
+        .log({ body: { service: "mnemosyne", level: "warn", message: msg } })
+        .catch(() => {}),
+    error: (msg: string) =>
+      client.app
+        .log({ body: { service: "mnemosyne", level: "error", message: msg } })
+        .catch(() => {}),
+  };
+
+  // Strip trailing slashes but keep the root slash if it's just "/"
+  let projectDir = targetDir.replace(/(.+?)\/+$/, "$1");
+  const projectRaw = path.basename(projectDir);
+  const project = projectRaw === "global" ? "default" : (projectRaw || "default");
+
+  log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
 
   /**
-   * Run the mnemosyne CLI binary gracefully.
-   * If the binary is not found, return a helpful install message
-   * instead of throwing.
+   * Run the mnemosyne CLI binary gracefully using Bun.spawn.
+   * Avoids shell interpolation entirely by passing args as array.
    */
   async function mnemosyne(...args: string[]): Promise<string> {
+    log.debug(`Executing: mnemosyne ${args.join(" ")}`);
     try {
-      return await $`mnemosyne ${args}`.text()
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
+      // @ts-ignore - Bun is globally available in opencode environment
+      const proc = Bun.spawn(["mnemosyne", ...args], {
+        cwd: targetDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      if (exitCode !== 0) {
+        log.error(`Execution failed (code ${exitCode}): ${stderr}`);
+        throw new Error(stderr.trim() || `mnemosyne ${args[0]} failed`);
+      }
+
+      log.debug(`Execution successful. Output size: ${stdout.length}`);
+      return stdout;
+    }
+    catch (e: unknown) {
+      log.error(`Execution error: ${e instanceof Error ? e.stack : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
       if (
         msg.includes("not found") ||
         msg.includes("ENOENT") ||
         msg.includes("No such file")
       ) {
-        return "Error: mnemosyne binary not found. Install it: https://github.com/gandazgul/mnemosyne#install"
+        return "Error: mnemosyne binary not found. Install it: https://github.com/gandazgul/mnemosyne#install";
       }
-      throw e
+      throw e;
     }
   }
 
   // Auto-init the project collection (idempotent).
-  await $`mnemosyne init --name ${project}`.quiet().nothrow()
+  try {
+    // @ts-ignore
+    await Bun.spawn(["mnemosyne", "init", "--name", project], {
+      cwd: targetDir,
+      stdout: "ignore", // Silence "collection already exists" logs
+      stderr: "pipe",   // Keep stderr for critical errors
+    }).exited;
+    log.info(`Ensured collection exists: ${project}`);
+  }
+  catch (e) {
+    log.warn(`Failed to auto-init collection: ${e}`);
+  }
 
   return {
     // ── Tools ──────────────────────────────────────────────
@@ -39,15 +98,18 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
           query: tool.schema.string().describe("Semantic search query"),
         },
         async execute(args) {
+          log.info(`Searching project memory for: ${args.query}`);
+          // Quote the query to prevent SQLite FTS errors with hyphens and special characters
+          const safeQuery = `"${args.query.replace(/"/g, '""')}"`;
           const result = await mnemosyne(
             "search",
             "--name",
             project,
             "--format",
             "plain",
-            args.query,
-          )
-          return result.trim() || "No memories found."
+            safeQuery,
+          );
+          return result.trim() || "No memories found.";
         },
       }),
 
@@ -58,14 +120,16 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
           query: tool.schema.string().describe("Semantic search query"),
         },
         async execute(args) {
+          log.info(`Searching global memory for: ${args.query}`);
+          const safeQuery = `"${args.query.replace(/"/g, '""')}"`;
           const result = await mnemosyne(
             "search",
             "--global",
             "--format",
             "plain",
-            args.query,
-          )
-          return result.trim() || "No global memories found."
+            safeQuery,
+          );
+          return result.trim() || "No global memories found.";
         },
       }),
 
@@ -76,9 +140,10 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
           content: tool.schema.string().describe("Concise memory to store"),
         },
         async execute(args) {
+          log.info(`Storing project memory: ${args.content}`);
           return (
             await mnemosyne("add", "--name", project, args.content)
-          ).trim()
+          ).trim();
         },
       }),
 
@@ -89,11 +154,21 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
           content: tool.schema.string().describe("Global memory to store"),
         },
         async execute(args) {
+          log.info(`Storing global memory: ${args.content}`);
           // Ensure the global collection exists.
-          await $`mnemosyne init --global`.quiet().nothrow()
-          return (
-            await mnemosyne("add", "--global", args.content)
-          ).trim()
+          try {
+            // @ts-ignore
+            await Bun.spawn(["mnemosyne", "init", "--global"], {
+              cwd: targetDir,
+              stdout: "ignore", // Silence "collection already exists" logs
+              stderr: "pipe",   // Keep stderr for critical errors
+            }).exited;
+            log.info("Ensured global collection exists.");
+          }
+          catch (e) {
+            log.warn(`Failed to auto-init global collection: ${e}`);
+          }
+          return (await mnemosyne("add", "--global", args.content)).trim();
         },
       }),
 
@@ -104,7 +179,8 @@ export const MnemosynePlugin: Plugin = async ({ $, directory, worktree }) => {
           id: tool.schema.number().describe("Document ID to delete"),
         },
         async execute(args) {
-          return (await mnemosyne("delete", String(args.id))).trim()
+          log.info(`Deleting memory document ID: ${args.id}`);
+          return (await mnemosyne("delete", String(args.id))).trim();
         },
       }),
     },
@@ -122,7 +198,7 @@ memory_recall_global, memory_store_global.
 - Search memory when past context would help.
 - Store concise summaries of decisions, preferences, and patterns.
 - Delete outdated memories when new decisions contradict them.
-- Use global variants for cross-project preferences.`)
+- Use global variants for cross-project preferences.`);
     },
-  }
-}
+  };
+};
