@@ -9,6 +9,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
+    "ci": "tsc --noEmit && tsc"
   },
   "keywords": [
     "opencode",
