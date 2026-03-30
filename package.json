@@ -1,6 +1,6 @@
 {
   "name": "opencode-mnemosyne",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "OpenCode plugin for local persistent memory using Mnemosyne — offline semantic search, no cloud required",
   "type": "module",
   "main": "dist/index.js",
