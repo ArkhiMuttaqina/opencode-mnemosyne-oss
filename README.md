@@ -40,8 +40,8 @@ The plugin registers five tools available to the AI agent:
 |------|-------------|
 | `memory_recall` | Search project memory for relevant context and past decisions |
 | `memory_recall_global` | Search global memory for cross-project preferences |
-| `memory_store` | Store a project-scoped memory (decision, preference, context) |
-| `memory_store_global` | Store a cross-project memory (coding style, tool choices) |
+| `memory_store` | Store a project-scoped memory (optionally as `core`) |
+| `memory_store_global` | Store a cross-project memory (optionally as `core`) |
 | `memory_delete` | Delete an outdated memory by its document ID |
 
 ### Hooks
@@ -54,6 +54,8 @@ The plugin registers five tools available to the AI agent:
 |-------|-----------|-----------------|
 | Project | `<directory-name>` | Sessions in the same project |
 | Global | `global` | All projects |
+| Core (project) | `<directory-name>` (tagged `core`) | Sessions + survives compaction |
+| Core (global) | `global` (tagged `core`) | All projects + survives compaction |
 
 The project collection is auto-initialized when the plugin loads. The global collection is created on first use of `memory_store_global`.
 
@@ -69,8 +71,10 @@ For best results, add this to your project or global `AGENTS.md` so the agent us
 - After significant decisions, use memory_store to save a concise summary.
 - Delete contradicted memories with memory_delete before storing updated ones.
 - Use memory_recall_global / memory_store_global for cross-project preferences.
-- When you are done with a session store any memories that you think are relevant to the user and the project. 
-  This will help you recall important information in future sessions.
+- Mark critical, always-relevant context as core (core=true) — but use sparingly.
+- When you are done with a session, store any memories that you think are relevant
+  to the user and the project. This will help you recall important information in
+  future sessions.
 ```
 
 ## How it works

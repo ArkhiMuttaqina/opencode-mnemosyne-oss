@@ -1,10 +1,10 @@
+import path from "node:path";
 import { type Plugin, tool } from "@opencode-ai/plugin";
-import path from "path";
 
 export const MnemosynePlugin: Plugin = async (ctx) => {
   const { directory, worktree, client } = ctx;
   const targetDir = directory || worktree || process.cwd();
-  
+
   const log = {
     debug: (msg: string) =>
       client.app
@@ -29,14 +29,14 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
   const projectRaw = path.basename(projectDir);
   const project = projectRaw === "global" ? "default" : (projectRaw || "default");
 
-  log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
+  await log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
 
   /**
    * Run the mnemosyne CLI binary gracefully using Bun.spawn.
    * Avoids shell interpolation entirely by passing args as array.
    */
   async function mnemosyne(...args: string[]): Promise<string> {
-    log.debug(`Executing: mnemosyne ${args.join(" ")}`);
+    await log.debug(`Executing: mnemosyne ${args.join(" ")}`);
     try {
       // @ts-ignore - Bun is globally available in opencode environment
       const proc = Bun.spawn(["mnemosyne", ...args], {
@@ -52,15 +52,17 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
       ]);
 
       if (exitCode !== 0) {
-        log.error(`Execution failed (code ${exitCode}): ${stderr}`);
+        await log.error(`Execution failed (code ${exitCode}): ${stderr}`);
         throw new Error(stderr.trim() || `mnemosyne ${args[0]} failed`);
       }
 
-      log.debug(`Execution successful. Output size: ${stdout.length}`);
-      return stdout;
+      // mnemosyne may write output to stderr (older versions), use whichever has content
+      const output = stdout || stderr;
+      await log.debug(`Execution successful. Output size: ${output.length}`);
+      return output;
     }
     catch (e: unknown) {
-      log.error(`Execution error: ${e instanceof Error ? e.stack : String(e)}`);
+      await log.error(`Execution error: ${e instanceof Error ? e.stack : String(e)}`);
       const msg = e instanceof Error ? e.message : String(e);
       if (
         msg.includes("not found") ||
@@ -81,10 +83,10 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
       stdout: "ignore", // Silence "collection already exists" logs
       stderr: "pipe",   // Keep stderr for critical errors
     }).exited;
-    log.info(`Ensured collection exists: ${project}`);
+    await log.info(`Ensured collection exists: ${project}`);
   }
   catch (e) {
-    log.warn(`Failed to auto-init collection: ${e}`);
+    await log.warn(`Failed to auto-init collection: ${e}`);
   }
 
   return {
@@ -98,9 +100,9 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
           query: tool.schema.string().describe("Semantic search query"),
         },
         async execute(args) {
-          log.info(`Searching project memory for: ${args.query}`);
+          await log.info(`Searching project memory for: ${args.query}`);
           // Quote the query to prevent SQLite FTS errors with hyphens and special characters
-          const safeQuery = `"${args.query.replace(/"/g, '""')}"`;
+          const safeQuery = `"${args.query.replaceAll('"', '""')}"`;
           const result = await mnemosyne(
             "search",
             "--name",
@@ -115,13 +117,13 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
 
       memory_recall_global: tool({
         description:
-          "Search global memory for cross-project preferences and patterns.",
+          "Search global memory for cross-project preferences, decisions and patterns.",
         args: {
           query: tool.schema.string().describe("Semantic search query"),
         },
         async execute(args) {
-          log.info(`Searching global memory for: ${args.query}`);
-          const safeQuery = `"${args.query.replace(/"/g, '""')}"`;
+          await log.info(`Searching global memory for: ${args.query}`);
+          const safeQuery = `"${args.query.replaceAll('"', '""')}"`;
           const result = await mnemosyne(
             "search",
             "--global",
@@ -135,26 +137,37 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
 
       memory_store: tool({
         description:
-          "Store a project memory: a decision, preference, or important context. One concise concept per memory.",
+          "Store a project memory: a decision, preference, or important context. One concise concept per memory. Set core=true for critical context that should always be available in every session (use sparingly).",
         args: {
           content: tool.schema.string().describe("Concise memory to store"),
+          core: tool.schema.boolean().optional().describe(
+            "If true, this memory is always injected into context (like AGENTS.md). Use sparingly."
+          ),
         },
         async execute(args) {
-          log.info(`Storing project memory: ${args.content}`);
+          await log.info(`Storing project memory: ${args.content}`);
+          const cmdArgs = ["add", "--name", project];
+          if (args.core) {
+            cmdArgs.push("--tag", "core");
+          }
+          cmdArgs.push(args.content);
           return (
-            await mnemosyne("add", "--name", project, args.content)
+            await mnemosyne(...cmdArgs)
           ).trim();
         },
       }),
 
       memory_store_global: tool({
         description:
-          "Store a cross-project memory: personal preferences, coding style, tool choices.",
+          "Store a cross-project memory: personal preferences, coding style, tool choices. Set core=true for critical cross-project context that should always be available.",
         args: {
           content: tool.schema.string().describe("Global memory to store"),
+          core: tool.schema.boolean().optional().describe(
+            "If true, this memory is always injected into context. Use sparingly."
+          ),
         },
         async execute(args) {
-          log.info(`Storing global memory: ${args.content}`);
+          await log.info(`Storing global memory: ${args.content}`);
           // Ensure the global collection exists.
           try {
             // @ts-ignore
@@ -163,23 +176,28 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
               stdout: "ignore", // Silence "collection already exists" logs
               stderr: "pipe",   // Keep stderr for critical errors
             }).exited;
-            log.info("Ensured global collection exists.");
+            await log.info("Ensured global collection exists.");
           }
           catch (e) {
-            log.warn(`Failed to auto-init global collection: ${e}`);
+            await log.warn(`Failed to auto-init global collection: ${e}`);
           }
-          return (await mnemosyne("add", "--global", args.content)).trim();
+          const cmdArgs = ["add", "--global"];
+          if (args.core) {
+            cmdArgs.push("--tag", "core");
+          }
+          cmdArgs.push(args.content);
+          return (await mnemosyne(...cmdArgs)).trim();
         },
       }),
 
       memory_delete: tool({
         description:
-          "Delete an outdated or incorrect memory by its document ID (shown in [brackets] in recall results).",
+          "Delete an outdated or incorrect memory by its document ID (shown in [brackets] in recall/list results).",
         args: {
           id: tool.schema.number().describe("Document ID to delete"),
         },
         async execute(args) {
-          log.info(`Deleting memory document ID: ${args.id}`);
+          await log.info(`Deleting memory document ID: ${args.id}`);
           return (await mnemosyne("delete", String(args.id))).trim();
         },
       }),
@@ -195,10 +213,13 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
 You have persistent memory tools: memory_recall, memory_store, memory_delete,
 memory_recall_global, memory_store_global.
 
-- Search memory when past context would help.
-- Store concise summaries of decisions, preferences, and patterns.
+When to use memory:
+- Search memory when past context would help answer the user's request.
+- Store concise summaries of important decisions, preferences, and patterns.
 - Delete outdated memories when new decisions contradict them.
-- Use global variants for cross-project preferences.`);
+- Use **core** for facts that should always be in context (project architecture, key conventions, user preferences).
+- Use **global** variants for cross-project preferences (coding style, tool choices).
+- At the end of a session, store any relevant memories for future sessions.`);
     },
   };
 };
