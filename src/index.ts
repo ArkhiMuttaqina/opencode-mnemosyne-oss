@@ -24,10 +24,14 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         .catch(() => {}),
   };
 
-  // Strip trailing slashes but keep the root slash if it's just "/"
+  // Strip trailing slashes but keep the root slash if it's just "/".
   let projectDir = targetDir.replace(/(.+?)\/+$/, "$1");
   const projectRaw = path.basename(projectDir);
   const project = projectRaw === "global" ? "default" : (projectRaw || "default");
+  const projectSource = `opencode:${project}`;
+  const globalSource = "opencode:global";
+  const defaultRecallCount = "10";
+  const coreImportance = "1";
 
   await log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
 
@@ -75,20 +79,6 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
     }
   }
 
-  // Auto-init the project collection (idempotent).
-  try {
-    // @ts-ignore
-    await Bun.spawn(["mnemosyne", "init", "--name", project], {
-      cwd: targetDir,
-      stdout: "ignore", // Silence "collection already exists" logs
-      stderr: "pipe",   // Keep stderr for critical errors
-    }).exited;
-    await log.info(`Ensured collection exists: ${project}`);
-  }
-  catch (e) {
-    await log.warn(`Failed to auto-init collection: ${e}`);
-  }
-
   return {
     // ── Tools ──────────────────────────────────────────────
 
@@ -101,16 +91,7 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         },
         async execute(args) {
           await log.info(`Searching project memory for: ${args.query}`);
-          // Quote the query to prevent SQLite FTS errors with hyphens and special characters
-          const safeQuery = `"${args.query.replaceAll('"', '""')}"`;
-          const result = await mnemosyne(
-            "search",
-            "--name",
-            project,
-            "--format",
-            "plain",
-            safeQuery,
-          );
+          const result = await mnemosyne("recall", args.query, defaultRecallCount);
           return result.trim() || "No memories found.";
         },
       }),
@@ -123,14 +104,7 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         },
         async execute(args) {
           await log.info(`Searching global memory for: ${args.query}`);
-          const safeQuery = `"${args.query.replaceAll('"', '""')}"`;
-          const result = await mnemosyne(
-            "search",
-            "--global",
-            "--format",
-            "plain",
-            safeQuery,
-          );
+          const result = await mnemosyne("recall", args.query, defaultRecallCount);
           return result.trim() || "No global memories found.";
         },
       }),
@@ -146,11 +120,10 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         },
         async execute(args) {
           await log.info(`Storing project memory: ${args.content}`);
-          const cmdArgs = ["add", "--name", project];
+          const cmdArgs = ["store", args.content, projectSource];
           if (args.core) {
-            cmdArgs.push("--tag", "core");
+            cmdArgs.push(coreImportance);
           }
-          cmdArgs.push(args.content);
           return (
             await mnemosyne(...cmdArgs)
           ).trim();
@@ -168,24 +141,10 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         },
         async execute(args) {
           await log.info(`Storing global memory: ${args.content}`);
-          // Ensure the global collection exists.
-          try {
-            // @ts-ignore
-            await Bun.spawn(["mnemosyne", "init", "--global"], {
-              cwd: targetDir,
-              stdout: "ignore", // Silence "collection already exists" logs
-              stderr: "pipe",   // Keep stderr for critical errors
-            }).exited;
-            await log.info("Ensured global collection exists.");
-          }
-          catch (e) {
-            await log.warn(`Failed to auto-init global collection: ${e}`);
-          }
-          const cmdArgs = ["add", "--global"];
+          const cmdArgs = ["store", args.content, globalSource];
           if (args.core) {
-            cmdArgs.push("--tag", "core");
+            cmdArgs.push(coreImportance);
           }
-          cmdArgs.push(args.content);
           return (await mnemosyne(...cmdArgs)).trim();
         },
       }),

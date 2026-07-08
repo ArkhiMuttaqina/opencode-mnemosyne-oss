@@ -50,14 +50,16 @@ The plugin registers five tools available to the AI agent:
 
 ### Memory scoping
 
-| Scope | Collection | Persists across |
-|-------|-----------|-----------------|
-| Project | `<directory-name>` | Sessions in the same project |
-| Global | `global` | All projects |
-| Core (project) | `<directory-name>` (tagged `core`) | Sessions + survives compaction |
-| Core (global) | `global` (tagged `core`) | All projects + survives compaction |
+The current Mnemosyne CLI stores memories with a `source` field instead of named collections. This plugin writes project memories with `opencode:<directory-name>` and global memories with `opencode:global`.
 
-The project collection is auto-initialized when the plugin loads. The global collection is created on first use of `memory_store_global`.
+| Scope | Mnemosyne source | Persists across |
+|-------|------------------|-----------------|
+| Project | `opencode:<directory-name>` | Sessions in the same project |
+| Global | `opencode:global` | All projects |
+| Core (project) | `opencode:<directory-name>` with importance `1` | Sessions + survives compaction |
+| Core (global) | `opencode:global` with importance `1` | All projects + survives compaction |
+
+Recall uses `mnemosyne recall <query> 10` for both project and global tools because the latest CLI searches the active memory bank directly.
 
 ## AGENTS.md (recommended)
 
