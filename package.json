@@ -1,5 +1,5 @@
 {
-  "name": "opencode-mnemosyne",
+  "name": "opencode-mnemosyne-oss",
   "version": "0.2.4",
   "description": "OpenCode plugin for local persistent memory using official Mnemosyne - offline semantic search, no cloud required",
   "type": "module",
@@ -26,7 +26,7 @@
   "contributors": [
     {
       "name": "Arkhi Muttaqina",
-      "email": "arkhi07@hotmail.co.id",
+      "email": "arkhi07@gmail.com",
       "url": "https://github.com/ArkhiMuttaqina"
     },
     {
