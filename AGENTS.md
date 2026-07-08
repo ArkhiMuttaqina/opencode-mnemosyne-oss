@@ -4,7 +4,7 @@
 
 - Treat the official Mnemosyne repository as the CLI source of truth: https://github.com/mnemosyne-oss/mnemosyne
 - Keep this fork credited as derived from https://github.com/gandazgul/opencode-mnemosyne.
-- Preserve contributor metadata for Arkhi Muttaqina: https://github.com/ArkhiMuttaqina, arkhi07@hotmail.co.id.
+- Preserve contributor metadata for Arkhi Muttaqina: https://github.com/ArkhiMuttaqina, arkhi07@gmail.com.
 
 ## Versioning Rules
 

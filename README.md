@@ -1,4 +1,4 @@
-# opencode-mnemosyne
+# opencode-mnemosyne-oss
 
 OpenCode plugin for **local persistent memory** using the official [Mnemosyne](https://github.com/mnemosyne-oss/mnemosyne). Gives your AI coding agent memory that persists across sessions -- entirely offline, no cloud APIs.
 
@@ -6,16 +6,19 @@ This is the local/offline alternative to cloud-based memory plugins like opencod
 
 ## Prerequisites
 
-Install the mnemosyne binary first:
+Install the official Mnemosyne package first:
 
 ```bash
-# From source (requires Go 1.21+, GCC, Task)
-git clone https://github.com/mnemosyne-oss/mnemosyne.git
-cd mnemosyne
-task install
+pip install mnemosyne-memory
+
+# With all features, including vector search and MCP server
+pip install "mnemosyne-memory[all]"
+
+# Upgrade an existing install
+pip install --upgrade mnemosyne-memory
 ```
 
-See the [official mnemosyne README](https://github.com/mnemosyne-oss/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne will automatically download its ML models (~500 MB one-time).
+This plugin calls the installed `mnemosyne` CLI. See the [official Mnemosyne README](https://github.com/mnemosyne-oss/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne may download its local ML models.
 
 ## Install
 
@@ -24,7 +27,7 @@ Add to your `opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-mnemosyne"]
+  "plugin": ["opencode-mnemosyne-oss"]
 }
 ```
 
@@ -121,7 +124,7 @@ This project is forked from [gandazgul/opencode-mnemosyne](https://github.com/ga
 
 Contributors:
 
-- [Arkhi Muttaqina](https://github.com/ArkhiMuttaqina) <arkhi07@hotmail.co.id>
+- [Arkhi Muttaqina](https://github.com/ArkhiMuttaqina) <arkhi07@gmail.com>
 - [gandazgul](https://github.com/gandazgul) - original opencode-mnemosyne author
 
 ## License
