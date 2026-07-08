@@ -1,7 +1,7 @@
 {
   "name": "opencode-mnemosyne",
   "version": "0.2.4",
-  "description": "OpenCode plugin for local persistent memory using Mnemosyne — offline semantic search, no cloud required",
+  "description": "OpenCode plugin for local persistent memory using official Mnemosyne - offline semantic search, no cloud required",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,10 +23,21 @@
     "coding-agent"
   ],
   "author": "gandazgul",
+  "contributors": [
+    {
+      "name": "Arkhi Muttaqina",
+      "email": "arkhi07@hotmail.co.id",
+      "url": "https://github.com/ArkhiMuttaqina"
+    },
+    {
+      "name": "gandazgul",
+      "url": "https://github.com/gandazgul"
+    }
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gandazgul/opencode-mnemosyne.git"
+    "url": "git+https://github.com/ArkhiMuttaqina/opencode-mnemosyne-oss.git"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.2.24"

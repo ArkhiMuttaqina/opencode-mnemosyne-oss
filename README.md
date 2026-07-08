@@ -1,6 +1,6 @@
 # opencode-mnemosyne
 
-OpenCode plugin for **local persistent memory** using [Mnemosyne](https://github.com/gandazgul/mnemosyne). Gives your AI coding agent memory that persists across sessions -- entirely offline, no cloud APIs.
+OpenCode plugin for **local persistent memory** using the official [Mnemosyne](https://github.com/mnemosyne-oss/mnemosyne). Gives your AI coding agent memory that persists across sessions -- entirely offline, no cloud APIs.
 
 This is the local/offline alternative to cloud-based memory plugins like opencode-supermemory.
 
@@ -10,12 +10,12 @@ Install the mnemosyne binary first:
 
 ```bash
 # From source (requires Go 1.21+, GCC, Task)
-git clone https://github.com/gandazgul/mnemosyne.git
+git clone https://github.com/mnemosyne-oss/mnemosyne.git
 cd mnemosyne
 task install
 ```
 
-See the [mnemosyne README](https://github.com/gandazgul/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne will automatically download its ML models (~500 MB one-time).
+See the [official mnemosyne README](https://github.com/mnemosyne-oss/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne will automatically download its ML models (~500 MB one-time).
 
 ## Install
 
@@ -105,6 +105,24 @@ npm run dev
 # Run TypeScript checks
 npm run typecheck
 ```
+
+## Versioning
+
+This fork follows the official [mnemosyne-oss/mnemosyne](https://github.com/mnemosyne-oss/mnemosyne) CLI contract.
+
+- Patch releases (`0.2.x`) are for docs, metadata, and bug fixes that do not change plugin tool behavior.
+- Minor releases (`0.x.0`) are for compatibility updates when the official Mnemosyne CLI changes commands, arguments, or output shape.
+- Major releases (`x.0.0`) are for breaking changes to OpenCode tool names, tool schemas, memory scope behavior, or supported Mnemosyne versions.
+- Before publishing, run `npm run ci` and verify `mnemosyne store`, `mnemosyne recall`, and `mnemosyne delete` against the official CLI.
+
+## Credits
+
+This project is forked from [gandazgul/opencode-mnemosyne](https://github.com/gandazgul/opencode-mnemosyne) and aligned with the official [mnemosyne-oss/mnemosyne](https://github.com/mnemosyne-oss/mnemosyne) project.
+
+Contributors:
+
+- [Arkhi Muttaqina](https://github.com/ArkhiMuttaqina) <arkhi07@hotmail.co.id>
+- [gandazgul](https://github.com/gandazgul) - original opencode-mnemosyne author
 
 ## License
 
