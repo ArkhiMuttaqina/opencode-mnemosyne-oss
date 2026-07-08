@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/opencode-mnemosyne-oss"><img src="https://img.shields.io/npm/v/opencode-mnemosyne-oss?style=flat-square" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/opencode-mnemosyne-oss"><img src="https://badgen.net/npm/v/opencode-mnemosyne-oss" alt="npm version" /></a>
   <a href="https://github.com/ArkhiMuttaqina/opencode-mnemosyne-oss/actions"><img src="https://img.shields.io/github/actions/workflow/status/ArkhiMuttaqina/opencode-mnemosyne-oss/npm-publish.yml?style=flat-square" alt="GitHub Actions" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ArkhiMuttaqina/opencode-mnemosyne-oss?style=flat-square" alt="MIT license" /></a>
   <a href="https://github.com/mnemosyne-oss/mnemosyne"><img src="https://img.shields.io/badge/Mnemosyne-official-black?style=flat-square" alt="Official Mnemosyne" /></a>
