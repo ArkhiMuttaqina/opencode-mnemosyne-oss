@@ -29,7 +29,13 @@ pip install "mnemosyne-memory[all]"
 pip install --upgrade mnemosyne-memory
 ```
 
-This plugin calls the installed `mnemosyne` CLI. See the [official Mnemosyne README](https://github.com/mnemosyne-oss/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne may download its local ML models.
+This plugin calls the installed `mnemosyne` CLI. It first honors `MNEMOSYNE_BIN`, then runs your interactive shell's `which mnemosyne` and auto-resolves that path into `MNEMOSYNE_BIN` for the plugin process. If your shell does not expose it, the plugin probes common install paths such as `~/.local/bin` and Conda locations like `~/miniconda3/bin`. See the [official Mnemosyne README](https://github.com/mnemosyne-oss/mnemosyne#quick-start) for detailed setup instructions. On first use, mnemosyne may download its local ML models.
+
+If OpenCode runs with a narrower `PATH` than your interactive shell, set an explicit binary path:
+
+```bash
+export MNEMOSYNE_BIN="$HOME/miniconda3/bin/mnemosyne"
+```
 
 ## Install
 

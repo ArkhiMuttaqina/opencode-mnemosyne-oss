@@ -1,3 +1,5 @@
+import { constants as fsConstants } from "node:fs";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import { type Plugin, tool } from "@opencode-ai/plugin";
 
@@ -32,20 +34,150 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
   const globalSource = "opencode:global";
   const defaultRecallCount = "10";
   const coreImportance = "1";
+  const configuredBinary = process.env.MNEMOSYNE_BIN?.trim();
+  const homeDir = process.env.HOME?.trim();
+  let resolvedBinary: string | undefined;
 
   type StringRecord = Record<string, string | number | boolean | undefined>;
 
   await log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
+
+  async function isExecutable(candidate: string): Promise<boolean> {
+    try {
+      await access(candidate, fsConstants.X_OK);
+      return true;
+    }
+    catch {
+      return false;
+    }
+  }
+
+  async function resolveFromShell(shellPath: string): Promise<string | undefined> {
+    try {
+      // @ts-ignore - Bun is globally available in opencode environment
+      const proc = Bun.spawn([shellPath, "-ic", "which mnemosyne 2>/dev/null || command -v mnemosyne"], {
+        cwd: targetDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const [stdout, _stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      if (exitCode !== 0) {
+        return undefined;
+      }
+
+      const stdoutText = String(stdout);
+      const candidate = stdoutText
+        .trim()
+        .split(/\r?\n/)
+        .map((line: string) => line.trim())
+        .find((line: string) => line.endsWith(`${path.sep}mnemosyne`) || line === "mnemosyne");
+      if (!candidate) {
+        return undefined;
+      }
+
+      return candidate;
+    }
+    catch {
+      return undefined;
+    }
+  }
+
+  async function resolveBinary(): Promise<string | undefined> {
+    if (resolvedBinary) {
+      return resolvedBinary;
+    }
+
+    if (configuredBinary) {
+      if (await isExecutable(configuredBinary)) {
+        resolvedBinary = configuredBinary;
+        process.env.MNEMOSYNE_BIN = resolvedBinary;
+        return resolvedBinary;
+      }
+
+      await log.warn(`MNEMOSYNE_BIN is set but not executable: ${configuredBinary}`);
+    }
+
+    const loginShells = [process.env.SHELL, "/bin/bash", "/bin/zsh"]
+      .filter((shellPath, index, values): shellPath is string => Boolean(shellPath) && values.indexOf(shellPath) === index);
+
+    for (const shellPath of loginShells) {
+      const candidate = await resolveFromShell(shellPath);
+      if (candidate && (candidate.includes(path.sep) ? await isExecutable(candidate) : true)) {
+        resolvedBinary = candidate;
+        process.env.MNEMOSYNE_BIN = resolvedBinary;
+        await log.info(`Auto-resolved MNEMOSYNE_BIN=${resolvedBinary}`);
+        return resolvedBinary;
+      }
+    }
+
+    const candidates = [
+      homeDir ? path.join(homeDir, ".local", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, "miniconda3", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, "anaconda3", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, ".cargo", "bin", "mnemosyne") : undefined,
+      "/usr/local/bin/mnemosyne",
+      "/usr/bin/mnemosyne",
+      "/opt/homebrew/bin/mnemosyne",
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+
+      if (await isExecutable(candidate)) {
+        resolvedBinary = candidate;
+        process.env.MNEMOSYNE_BIN = resolvedBinary;
+        await log.info(`Auto-resolved MNEMOSYNE_BIN=${resolvedBinary}`);
+        return resolvedBinary;
+      }
+    }
+
+    return undefined;
+  }
+
+  function notFoundMessage(): string {
+    const checked = [
+      configuredBinary ? `MNEMOSYNE_BIN=${configuredBinary}` : undefined,
+      "PATH",
+      process.env.SHELL ? `login shell ${process.env.SHELL}` : undefined,
+      homeDir ? path.join(homeDir, ".local", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, "miniconda3", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, "anaconda3", "bin", "mnemosyne") : undefined,
+      homeDir ? path.join(homeDir, ".cargo", "bin", "mnemosyne") : undefined,
+      "/usr/local/bin/mnemosyne",
+      "/usr/bin/mnemosyne",
+      "/opt/homebrew/bin/mnemosyne",
+    ].filter(Boolean);
+
+    return [
+      "Error: mnemosyne binary not found.",
+      `Checked: ${checked.join(", ")}`,
+      "Set MNEMOSYNE_BIN=/absolute/path/to/mnemosyne if it is installed outside the agent PATH.",
+      "Install/setup: https://github.com/mnemosyne-oss/mnemosyne#quick-start",
+    ].join(" ");
+  }
 
   /**
    * Run the mnemosyne CLI binary gracefully using Bun.spawn.
    * Avoids shell interpolation entirely by passing args as array.
    */
   async function mnemosyne(...args: string[]): Promise<string> {
-    await log.debug(`Executing: mnemosyne ${args.join(" ")}`);
+    const binary = await resolveBinary();
+    if (!binary) {
+      return notFoundMessage();
+    }
+
+    await log.debug(`Executing: ${binary} ${args.join(" ")}`);
     try {
       // @ts-ignore - Bun is globally available in opencode environment
-      const proc = Bun.spawn(["mnemosyne", ...args], {
+      const proc = Bun.spawn([binary, ...args], {
         cwd: targetDir,
         stdout: "pipe",
         stderr: "pipe",
@@ -75,7 +207,8 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
         msg.includes("ENOENT") ||
         msg.includes("No such file")
       ) {
-        return "Error: mnemosyne binary not found. Install it: https://github.com/mnemosyne-oss/mnemosyne#quick-start";
+        resolvedBinary = undefined;
+        return notFoundMessage();
       }
       throw e;
     }
