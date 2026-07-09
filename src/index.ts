@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, lstat, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type Plugin, tool } from "@opencode-ai/plugin";
 
@@ -36,11 +36,191 @@ export const MnemosynePlugin: Plugin = async (ctx) => {
   const coreImportance = "1";
   const configuredBinary = process.env.MNEMOSYNE_BIN?.trim();
   const homeDir = process.env.HOME?.trim();
+  const rawConfigRoot = process.env.XDG_CONFIG_HOME?.trim() || (homeDir ? path.join(homeDir, ".config") : undefined);
+  const configRoot = rawConfigRoot && path.isAbsolute(rawConfigRoot) ? rawConfigRoot : undefined;
   let resolvedBinary: string | undefined;
 
   type StringRecord = Record<string, string | number | boolean | undefined>;
 
   await log.debug(`Plugin loaded for project: ${project} (dir: ${targetDir})`);
+
+  const globalAgentsStart = "<!-- opencode-mnemosyne-oss:start -->";
+  const globalAgentsEnd = "<!-- opencode-mnemosyne-oss:end -->";
+  const globalAgentsBlock = `${globalAgentsStart}
+## Memory (mnemosyne)
+
+- At the start of a session, use memory_recall and memory_recall_global to search for context relevant to the user's first message.
+- Use memory_recall before changing unfamiliar code, debugging regressions, or making architecture decisions.
+- After significant decisions, non-obvious bug fixes, or durable project conventions, use memory_store with one concise concept per memory.
+- Use memory_update when a useful memory needs correction; use memory_delete when a memory is wrong, unsafe, or contradicted.
+- Use memory_recall_global and memory_store_global only for cross-project preferences, coding style, tool choices, or personal workflow rules.
+- Mark critical always-relevant context as core=true sparingly so it behaves like persistent AGENTS.md context.
+- Run memory_sleep at handoff or after storing many memories, and use memory_export or memory_backup before risky maintenance.
+- Never store secrets, credentials, API keys, private personal data, or unnecessary proprietary details in Mnemosyne memory; ask first when sensitivity is unclear.
+${globalAgentsEnd}
+`;
+  const globalAgentsLockStaleMs = 30_000;
+
+  function isNotFoundError(error: unknown): boolean {
+    return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+  }
+
+  function hasErrorCode(error: unknown, code: string): boolean {
+    return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+  }
+
+  function upsertMarkedBlock(current: string, block: string): string {
+    const startIndex = current.indexOf(globalAgentsStart);
+    const endIndex = current.indexOf(globalAgentsEnd);
+
+    if ((startIndex === -1) !== (endIndex === -1) || (startIndex !== -1 && endIndex <= startIndex)) {
+      const repaired = current
+        .split(/\r?\n/)
+        .filter((line) => !line.includes(globalAgentsStart) && !line.includes(globalAgentsEnd))
+        .join("\n")
+        .replace(/\s*$/, "");
+      const marker = "<!-- opencode-mnemosyne-oss:warning malformed managed block repaired -->";
+      return repaired ? `${repaired}\n\n${marker}\n\n${block}` : `${marker}\n\n${block}`;
+    }
+
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const afterEnd = endIndex + globalAgentsEnd.length;
+      const lineBreakLength = current.startsWith("\r\n", afterEnd) ? 2 : current.startsWith("\n", afterEnd) ? 1 : 0;
+      return `${current.slice(0, startIndex)}${block}${current.slice(afterEnd + lineBreakLength)}`;
+    }
+
+    if (!current.trim()) {
+      return block;
+    }
+
+    return `${current.replace(/\s*$/, "")}\n\n${block}`;
+  }
+
+  async function acquireGlobalAgentsLock(lockPath: string): Promise<() => Promise<void>> {
+    try {
+      const handle = await open(lockPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
+      await handle.close();
+      return async () => {
+        await rm(lockPath, { force: true });
+      };
+    }
+    catch (error: unknown) {
+      if (hasErrorCode(error, "EEXIST")) {
+        try {
+          const stat = await lstat(lockPath);
+          if (stat.isFile() && Date.now() - stat.mtimeMs > globalAgentsLockStaleMs) {
+            await rm(lockPath, { force: true });
+            return acquireGlobalAgentsLock(lockPath);
+          }
+        }
+        catch (lockError: unknown) {
+          if (!isNotFoundError(lockError)) {
+            throw lockError;
+          }
+
+          // Retry once when the lock disappeared between open() and lstat().
+          return acquireGlobalAgentsLock(lockPath);
+        }
+      }
+
+      if (!hasErrorCode(error, "EEXIST")) {
+        throw error;
+      }
+
+      throw new Error(`global AGENTS.md is locked by another OpenCode session: ${lockPath}`);
+    }
+  }
+
+  async function readRegularFileNoFollow(filePath: string): Promise<{ content: string; mode?: number }> {
+    try {
+      const stat = await lstat(filePath);
+      if (!stat.isFile()) {
+        throw new Error(`Refusing to update non-regular file: ${filePath}`);
+      }
+      if (stat.isSymbolicLink()) {
+        throw new Error(`Refusing to follow symlink for global AGENTS.md: ${filePath}`);
+      }
+
+      const handle = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+      try {
+        return { content: await handle.readFile("utf8"), mode: stat.mode & 0o777 };
+      }
+      finally {
+        await handle.close();
+      }
+    }
+    catch (error: unknown) {
+      if (isNotFoundError(error)) {
+        return { content: "" };
+      }
+
+      throw error;
+    }
+  }
+
+  async function ensureSafeDirectory(dirPath: string): Promise<{ dev: number; ino: number }> {
+    const stat = await lstat(dirPath);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw new Error(`Refusing to update global AGENTS.md under unsafe directory: ${dirPath}`);
+    }
+
+    return { dev: stat.dev, ino: stat.ino };
+  }
+
+  async function ensureSameDirectory(dirPath: string, expected: { dev: number; ino: number }): Promise<void> {
+    const current = await ensureSafeDirectory(dirPath);
+    if (current.dev !== expected.dev || current.ino !== expected.ino) {
+      throw new Error(`Refusing to update global AGENTS.md because config directory changed during write: ${dirPath}`);
+    }
+  }
+
+  async function ensureGlobalAgentsInstructions(): Promise<void> {
+    if (process.env.MNEMOSYNE_SKIP_GLOBAL_AGENTS?.trim() === "1") {
+      await log.debug("Skipping global AGENTS.md memory instruction install because MNEMOSYNE_SKIP_GLOBAL_AGENTS=1");
+      return;
+    }
+
+    if (!configRoot) {
+      await log.warn("Cannot install global AGENTS.md memory instructions because HOME/XDG_CONFIG_HOME is not set to an absolute path");
+      return;
+    }
+
+    const agentsPath = path.join(configRoot, "opencode", "AGENTS.md");
+    const lockPath = `${agentsPath}.lock`;
+    const tempPath = `${agentsPath}.${process.pid}.${Date.now()}.tmp`;
+    let releaseLock: (() => Promise<void>) | undefined;
+
+    try {
+      const agentsDir = path.dirname(agentsPath);
+      await mkdir(agentsDir, { recursive: true });
+      const agentsDirIdentity = await ensureSafeDirectory(agentsDir);
+      releaseLock = await acquireGlobalAgentsLock(lockPath);
+      await ensureSameDirectory(agentsDir, agentsDirIdentity);
+
+      const { content: current, mode } = await readRegularFileNoFollow(agentsPath);
+      await ensureSameDirectory(agentsDir, agentsDirIdentity);
+
+      const next = upsertMarkedBlock(current, globalAgentsBlock);
+      if (next !== current) {
+        await writeFile(tempPath, next, { encoding: "utf8", mode: mode ?? 0o600 });
+        await ensureSameDirectory(agentsDir, agentsDirIdentity);
+        await rename(tempPath, agentsPath);
+        await ensureSameDirectory(agentsDir, agentsDirIdentity);
+        await log.info(`Installed Mnemosyne memory instructions in ${agentsPath}`);
+      }
+    }
+    catch (error: unknown) {
+      await rm(tempPath, { force: true }).catch(() => {});
+      await log.warn(`Could not install global AGENTS.md memory instructions: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    finally {
+      if (releaseLock) {
+        await releaseLock().catch(() => {});
+      }
+    }
+  }
+
+  await ensureGlobalAgentsInstructions();
 
   async function isExecutable(candidate: string): Promise<boolean> {
     try {

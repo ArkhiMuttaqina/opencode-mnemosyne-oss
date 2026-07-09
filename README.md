@@ -97,6 +97,7 @@ Mnemosyne also provides `mnemosyne mcp`, `mnemosyne sync-serve`, Python SDK APIs
 ### Hooks
 
 - **`experimental.session.compacting`** -- Injects memory tool instructions into the compaction prompt so the agent retains awareness of its memory capabilities across context window resets.
+- **Global `AGENTS.md` installer** -- On plugin load, upserts Mnemosyne-specific instructions into `${XDG_CONFIG_HOME:-~/.config}/opencode/AGENTS.md` so OpenCode can apply memory rules across sessions; the generated block may take effect from the next session or restart. Set `MNEMOSYNE_SKIP_GLOBAL_AGENTS=1` to opt out.
 
 ### Memory scoping
 
@@ -135,9 +136,32 @@ Use these patterns to get the most value from memory in OpenCode:
 3. Use `memory_diagnose`, `memory_verify`, and `memory_reindex` when recall quality or database health needs attention.
 4. Use `memory_sync`, `memory_sync_status`, and `memory_sync_generate_key` for multi-machine or team-agent workflows.
 
-## AGENTS.md (recommended)
+## AGENTS.md and global instructions
 
-For best results, add this to your project or global `AGENTS.md` so the agent uses memory proactively from the start of each session:
+OpenCode supports personal global rules in `~/.config/opencode/AGENTS.md`. Because that file is not committed or shared with your team, this plugin automatically maintains a marked Mnemosyne block there on plugin startup; depending on when your OpenCode version loads plugins versus global rules, the generated block may apply from the next OpenCode session or restart:
+
+```markdown
+<!-- opencode-mnemosyne-oss:start -->
+## Memory (mnemosyne)
+
+- At the start of a session, use memory_recall and memory_recall_global to search for context relevant to the user's first message.
+- Use memory_recall before changing unfamiliar code, debugging regressions, or making architecture decisions.
+- After significant decisions, non-obvious bug fixes, or durable project conventions, use memory_store with one concise concept per memory.
+- Use memory_update when a useful memory needs correction; use memory_delete when a memory is wrong, unsafe, or contradicted.
+- Use memory_recall_global and memory_store_global only for cross-project preferences, coding style, tool choices, or personal workflow rules.
+- Mark critical always-relevant context as core=true sparingly so it behaves like persistent AGENTS.md context.
+- Run memory_sleep at handoff or after storing many memories, and use memory_export or memory_backup before risky maintenance.
+- Never store secrets, credentials, API keys, private personal data, or unnecessary proprietary details in Mnemosyne memory; ask first when sensitivity is unclear.
+<!-- opencode-mnemosyne-oss:end -->
+```
+
+The start/end markers let future plugin versions refresh only the Mnemosyne block without overwriting your personal global rules. The installer only writes under an absolute OpenCode config path, refuses symlinked/non-regular `AGENTS.md` targets, and uses a lock plus atomic rename to reduce clobber risk from concurrent sessions. To disable this write, set:
+
+```bash
+export MNEMOSYNE_SKIP_GLOBAL_AGENTS=1
+```
+
+You can also keep a project-level `AGENTS.md` with repo-specific memory behavior. For example:
 
 ```markdown
 ## Memory (mnemosyne)
