@@ -224,7 +224,7 @@ This project is forked from [gandazgul/opencode-mnemosyne](https://github.com/ga
 
 Contributors:
 
-- [Arkhi Muttaqina](https://github.com/ArkhiMuttaqina) <arkhi07@gmail.com>
+- [Arkhi Muttaqina](https://github.com/ArkhiMuttaqina) <arkhi07@hotmail.co.id>
 - [gandazgul](https://github.com/gandazgul) - original opencode-mnemosyne author
 
 ## License

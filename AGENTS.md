@@ -4,7 +4,7 @@
 
 - Treat the official Mnemosyne repository as the CLI source of truth: https://github.com/mnemosyne-oss/mnemosyne
 - Keep this fork credited as derived from https://github.com/gandazgul/opencode-mnemosyne.
-- Preserve contributor metadata for Arkhi Muttaqina: https://github.com/ArkhiMuttaqina, arkhi07@gmail.com.
+- Preserve contributor metadata for Arkhi Muttaqina: https://github.com/ArkhiMuttaqina, arkhi07@hotmail.co.id.
 - This plugin must remain local-first/offline by default; do not add cloud memory services or network sync unless the user explicitly configures Mnemosyne sync.
 
 ## Agentic Coding Tools
